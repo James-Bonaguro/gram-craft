@@ -1,0 +1,88 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model BrandKit {
+  id             String    @id @default(cuid())
+  name           String
+  handle         String    @default("@username")
+  displayName    String    @default("Creator")
+  avatarUrl      String?
+  primaryColor   String    @default("#6366F1") // Indigo
+  secondaryColor String    @default("#EC4899") // Pink
+  bgColor        String    @default("#0F172A") // Slate 900
+  cardBgColor    String    @default("#1E293B") // Slate 800
+  textColor      String    @default("#F8FAFC") // Slate 50
+  accentColor    String    @default("#F59E0B") // Amber
+  fontHeading    String    @default("Inter")
+  fontBody       String    @default("Inter")
+  toneVoice      String    @default("Direct, punchy, insightful")
+  targetAudience String    @default("Entrepreneurs, creators, and professionals")
+  bannedWords    String    @default("synergy, leverage, delve")
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  projects       Project[]
+}
+
+model Project {
+  id             String          @id @default(cuid())
+  title          String
+  type           String          @default("CAROUSEL") // "CAROUSEL" | "REEL"
+  status         String          @default("DRAFT")     // "DRAFT" | "READY" | "EXPORTED"
+  brandKitId     String?
+  brandKit       BrandKit?       @relation(fields: [brandKitId], references: [id], onDelete: SetNull)
+  caption        String?
+  hashtags       String?
+  rawInput       String?
+  inputType      String          @default("PROMPT")   // "PROMPT" | "REPURPOSE" | "HOOK_FORMULA"
+  templateStyle  String          @default("minimal")  // "minimal" | "tweet" | "bold" | "infographic"
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  slides         CarouselSlide[]
+  reelBeats      ReelBeat[]
+}
+
+model CarouselSlide {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order          Int
+  slideType      String   @default("CONTENT") // "COVER" | "CONTENT" | "QUOTE" | "COMPARISON" | "CTA"
+  headline       String
+  subheadline    String?
+  bodyText       String?
+  bulletPoints   String?  // JSON stringified array of bullets
+  badgeText      String?  // e.g. "Rule #1", "Mistake #3", "Pro Tip"
+  quoteAuthor    String?
+  customJson     String?  // For dynamic per-slide theme overrides or specific layouts
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ReelBeat {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order            Int
+  beatType         String   @default("BODY") // "HOOK" | "BODY" | "TRANSITION" | "CTA"
+  visualCue        String   // Camera angle, B-roll description, graphic animation
+  spokenAudio      String   // Spoken dialogue / voiceover script
+  onScreenText     String?  // Punchy text banner overlay
+  estimatedSeconds Int      @default(5)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
