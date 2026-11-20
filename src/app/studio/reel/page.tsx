@@ -13,8 +13,10 @@ import {
   Play,
   Loader2,
   Timer,
+  AlertCircle,
+  FileText,
 } from "lucide-react";
-import { ReelBeatData, BrandKitData, ProjectData } from "@/types";
+import { ReelBeatData, ReelHookData, BrandKitData, ProjectData } from "@/types";
 import { TeleprompterModal } from "@/components/reel/TeleprompterModal";
 import { ExportModal } from "@/components/export/ExportModal";
 import { HOOK_FORMULAS } from "@/lib/hook-formulas";
@@ -22,7 +24,10 @@ import { HOOK_FORMULAS } from "@/lib/hook-formulas";
 function ReelStudioContent() {
   const searchParams = useSearchParams();
   const initialFormula = searchParams.get("formula");
-  const projectId = searchParams.get("id");
+  const initialProjectId = searchParams.get("id");
+
+  // Project ID State (retained across saves)
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(initialProjectId || null);
 
   // State
   const [brands, setBrands] = useState<BrandKitData[]>([]);
@@ -33,7 +38,9 @@ function ReelStudioContent() {
     initialFormula ? "HOOK_FORMULA" : "PROMPT"
   );
   const [inputText, setInputText] = useState(initialFormula || "");
+  const [useDemoMode, setUseDemoMode] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -41,7 +48,7 @@ function ReelStudioContent() {
   const [projectTitle, setProjectTitle] = useState("Instagram Reel Storyboard");
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
-  const [hooks, setHooks] = useState<Array<{ text: string; score: number }>>([]);
+  const [hooks, setHooks] = useState<ReelHookData[]>([]);
   const [selectedHookIndex, setSelectedHookIndex] = useState(0);
   const [beats, setBeats] = useState<ReelBeatData[]>([]);
 
@@ -52,29 +59,42 @@ function ReelStudioContent() {
   useEffect(() => {
     fetch("/api/brands")
       .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setBrands(data);
-          const def = data.find((b) => b.isDefault) || data[0];
-          setSelectedBrand(def);
+      .then((brandList) => {
+        if (Array.isArray(brandList) && brandList.length > 0) {
+          setBrands(brandList);
+
+          if (currentProjectId) {
+            fetch(`/api/projects/${currentProjectId}`)
+              .then((res) => res.json())
+              .then((proj: ProjectData) => {
+                if (proj && proj.id) {
+                  setProjectTitle(proj.title || "Instagram Reel Storyboard");
+                  setCaption(proj.caption || "");
+                  setHashtags(proj.hashtags || "");
+                  if (proj.rawInput) setInputText(proj.rawInput);
+                  if (proj.inputType) setInputMode(proj.inputType);
+
+                  if (proj.brandKitId) {
+                    const matched = brandList.find((b: BrandKitData) => b.id === proj.brandKitId);
+                    if (matched) setSelectedBrand(matched);
+                  } else {
+                    const def = brandList.find((b: BrandKitData) => b.isDefault) || brandList[0];
+                    setSelectedBrand(def);
+                  }
+
+                  if (proj.reelBeats && proj.reelBeats.length > 0) {
+                    setBeats(proj.reelBeats);
+                  }
+                }
+              })
+              .catch((err) => console.error("Error loading reel project:", err));
+          } else {
+            const def = brandList.find((b: BrandKitData) => b.isDefault) || brandList[0];
+            setSelectedBrand(def);
+          }
         }
       });
-
-    if (projectId) {
-      fetch(`/api/projects/${projectId}`)
-        .then((res) => res.json())
-        .then((proj: ProjectData) => {
-          if (proj && proj.id) {
-            setProjectTitle(proj.title);
-            setCaption(proj.caption || "");
-            setHashtags(proj.hashtags || "");
-            if (proj.reelBeats && proj.reelBeats.length > 0) {
-              setBeats(proj.reelBeats);
-            }
-          }
-        });
-    }
-  }, [projectId]);
+  }, [currentProjectId]);
 
   // AI Reel Generation
   const handleGenerate = async () => {
@@ -85,6 +105,8 @@ function ReelStudioContent() {
 
     try {
       setIsGenerating(true);
+      setGenerationError("");
+
       const res = await fetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,26 +115,30 @@ function ReelStudioContent() {
           input: inputText,
           inputMode,
           brandKitId: selectedBrand?.id,
+          isDemo: useDemoMode,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Generation failed");
+      if (!res.ok) {
+        throw new Error(data.error || "Generation failed");
+      }
 
       setProjectTitle(data.title || "Instagram Reel Storyboard");
       setCaption(data.caption || "");
       setHashtags(data.hashtags || "");
       if (Array.isArray(data.hooks)) setHooks(data.hooks);
       if (Array.isArray(data.beats)) setBeats(data.beats);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      alert("Error generating reel: " + String(err));
+      const message = err instanceof Error ? err.message : "Failed to generate reel script.";
+      setGenerationError(message);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Save Project
+  // Save Project (Atomic & ID retaining)
   const handleSaveProject = async () => {
     try {
       setIsSaving(true);
@@ -127,8 +153,8 @@ function ReelStudioContent() {
         reelBeats: beats,
       };
 
-      const url = projectId ? `/api/projects/${projectId}` : "/api/projects";
-      const method = projectId ? "PUT" : "POST";
+      const url = currentProjectId ? `/api/projects/${currentProjectId}` : "/api/projects";
+      const method = currentProjectId ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
@@ -136,12 +162,19 @@ function ReelStudioContent() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed to save project");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save project");
+
+      if (!currentProjectId && data.id) {
+        setCurrentProjectId(data.id);
+        window.history.replaceState(null, "", `/studio/reel?id=${data.id}`);
+      }
 
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
-    } catch (err) {
-      alert("Save error: " + String(err));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Save error: " + message);
     } finally {
       setIsSaving(false);
     }
@@ -304,7 +337,7 @@ function ReelStudioContent() {
                   onChange={(e) => setInputText(e.target.value)}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-300 focus:outline-none"
                 >
-                  <option value="">Select a proven viral formula...</option>
+                  <option value="">Select a proven framework formula...</option>
                   {HOOK_FORMULAS.map((h) => (
                     <option key={h.id} value={h.template}>
                       [{h.category}] {h.title}
@@ -326,30 +359,55 @@ function ReelStudioContent() {
               className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-pink-500 leading-relaxed font-sans"
             />
 
-            <button
-              disabled={isGenerating}
-              onClick={handleGenerate}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:opacity-90 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Scripting Reel...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Generate Reel Storyboard</span>
-                </>
-              )}
-            </button>
+            {/* Error Message if Generation Fails */}
+            {generationError && (
+              <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-xs text-red-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                <div className="space-y-1">
+                  <div className="font-semibold">{generationError}</div>
+                  <div className="text-[11px] text-neutral-400">
+                    Configure your key in <a href="/settings" className="underline text-indigo-400">Settings</a> or enable <strong>Use Demo Template</strong> below.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs text-neutral-400 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={useDemoMode}
+                  onChange={(e) => setUseDemoMode(e.target.checked)}
+                  className="rounded text-pink-600 focus:ring-0"
+                />
+                <span>Use Demo Template</span>
+              </label>
+
+              <button
+                disabled={isGenerating}
+                onClick={handleGenerate}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:opacity-90 text-white font-bold text-xs shadow-md transition-all disabled:opacity-50"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Scripting Reel...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>{useDemoMode ? "Populate Demo" : "Generate Reel"}</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Hook Variant Selector */}
+          {/* Hook Variant Selector (Transparent Angle Descriptions) */}
           {hooks.length > 0 && (
             <div className="p-5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
               <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                Hook Variants & Retention Scores
+                Hook Angles
               </span>
               <div className="space-y-2">
                 {hooks.map((h, i) => (
@@ -366,8 +424,8 @@ function ReelStudioContent() {
                       <span className="text-[10px] font-black uppercase text-pink-400">
                         Option 0{i + 1}
                       </span>
-                      <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                        {h.score}% Retention
+                      <span className="text-xs font-mono font-bold text-indigo-300 bg-indigo-950/50 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                        {h.angle || `Angle 0${i + 1}`}
                       </span>
                     </div>
                     <p className="text-xs font-medium text-white/90 leading-snug">
@@ -378,6 +436,28 @@ function ReelStudioContent() {
               </div>
             </div>
           )}
+
+          {/* In-Studio Caption & Hashtag Editor */}
+          <div className="p-5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+            <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-pink-400" />
+              <span>Post Caption & Hashtags</span>
+            </span>
+            <textarea
+              rows={4}
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Instagram reel caption with paragraph breaks..."
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-xs text-white leading-relaxed focus:outline-none"
+            />
+            <input
+              type="text"
+              value={hashtags}
+              onChange={(e) => setHashtags(e.target.value)}
+              placeholder="#reels #contentcreation #video..."
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-xs text-pink-300 font-mono focus:outline-none"
+            />
+          </div>
 
           {/* Timing & Pacing Barometer */}
           <div className="p-4 rounded-2xl bg-neutral-900/40 border border-neutral-800 flex items-center justify-between text-xs">
@@ -423,7 +503,7 @@ function ReelStudioContent() {
               <Video className="w-12 h-12 mx-auto text-neutral-600" />
               <h3 className="text-base font-bold text-neutral-300">No script generated yet</h3>
               <p className="text-xs">
-                Use the generator on the left to write your reel storyboard.
+                Enter a topic on the left or click <strong>Use Demo Template</strong> to preview a complete reel storyboard.
               </p>
             </div>
           ) : (
@@ -539,7 +619,7 @@ function ReelStudioContent() {
         beats={beats}
       />
 
-      {/* Export & Google Drive Sync Modal */}
+      {/* Export & Local Folder Sync Modal */}
       {selectedBrand && (
         <ExportModal
           isOpen={isExportOpen}

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Layers, Video, Palette, Settings, LayoutDashboard, Cloud, Sparkles } from "lucide-react";
+import { Layers, Video, Palette, Settings, LayoutDashboard, Folder, Sparkles } from "lucide-react";
 import { BrandKitData } from "@/types";
 
 export function Navigation() {
@@ -87,13 +87,14 @@ export function Navigation() {
             </Link>
           )}
 
-          <div
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-semibold"
-            title="Local Google Drive auto-sync is active"
+          <Link
+            href="/settings"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-300 text-xs font-semibold transition-colors"
+            title="Configure local export directory in Settings"
           >
-            <Cloud className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Drive Synced</span>
-          </div>
+            <Folder className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Local Export Ready</span>
+          </Link>
         </div>
       </div>
     </header>

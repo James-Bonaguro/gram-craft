@@ -229,30 +229,23 @@ export default function BrandKitsPage() {
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase">Brand Kit Name</label>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-bold text-neutral-400 uppercase">
+                  Internal Kit Name (Workspace reference only)
+                </label>
                 <input
                   type="text"
                   value={editingBrand.name}
                   onChange={(e) => setEditingBrand({ ...editingBrand, name: e.target.value })}
-                  placeholder="e.g. Modern Creator"
+                  placeholder="e.g. Modern Creator, Personal Brand, Client A"
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase">Instagram Handle</label>
-                <input
-                  type="text"
-                  value={editingBrand.handle}
-                  onChange={(e) => setEditingBrand({ ...editingBrand, handle: e.target.value })}
-                  placeholder="@yourhandle"
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase">Display Name</label>
+                <label className="text-xs font-bold text-neutral-400 uppercase">
+                  Public Display Name (Printed on Slides)
+                </label>
                 <input
                   type="text"
                   value={editingBrand.displayName}
@@ -263,14 +256,46 @@ export default function BrandKitsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase">Heading Font</label>
+                <label className="text-xs font-bold text-neutral-400 uppercase">
+                  Public Handle (Printed in Header/Footer)
+                </label>
                 <input
                   type="text"
-                  value={editingBrand.fontHeading}
-                  onChange={(e) => setEditingBrand({ ...editingBrand, fontHeading: e.target.value })}
-                  placeholder="Inter, Georgia, Montserrat"
+                  value={editingBrand.handle}
+                  onChange={(e) => setEditingBrand({ ...editingBrand, handle: e.target.value })}
+                  placeholder="@yourhandle"
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-neutral-400 uppercase">Heading Font</label>
+                <select
+                  value={editingBrand.fontHeading}
+                  onChange={(e) => setEditingBrand({ ...editingBrand, fontHeading: e.target.value })}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="Inter">Inter (Clean Modern Sans)</option>
+                  <option value="System">System UI (Native Sans)</option>
+                  <option value="Georgia">Georgia (Editorial Serif)</option>
+                  <option value="Mono">Monospace (Technical)</option>
+                  <option value="Helvetica">Helvetica (Classic Sans)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-neutral-400 uppercase">Body Font</label>
+                <select
+                  value={editingBrand.fontBody}
+                  onChange={(e) => setEditingBrand({ ...editingBrand, fontBody: e.target.value })}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="Inter">Inter (Clean Modern Sans)</option>
+                  <option value="System">System UI (Native Sans)</option>
+                  <option value="Georgia">Georgia (Editorial Serif)</option>
+                  <option value="Mono">Monospace (Technical)</option>
+                  <option value="Helvetica">Helvetica (Classic Sans)</option>
+                </select>
               </div>
             </div>
 

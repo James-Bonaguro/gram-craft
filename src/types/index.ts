@@ -49,6 +49,11 @@ export interface ReelBeatData {
   estimatedSeconds: number;
 }
 
+export interface ReelHookData {
+  text: string;
+  angle: string;
+}
+
 export interface ProjectData {
   id?: string;
   title: string;

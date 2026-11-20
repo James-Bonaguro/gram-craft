@@ -50,10 +50,10 @@ export default function Dashboard() {
             <Sparkles className="w-3.5 h-3.5" /> Creation Command Center
           </div>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">
-            Produce High-Converting Carousels & Reels
+            Instagram Carousel & Reel Creation Studio
           </h1>
           <p className="text-neutral-400 text-base max-w-2xl">
-            Generate pixel-perfect 4:5 Instagram carousel slides, script viral reel storyboards with fullscreen teleprompter mode, and auto-sync directly to your Google Drive.
+            Design structured 4:5 Instagram carousel slides, script reel storyboards with fullscreen teleprompter mode, and export directly to your local archives or mounted Google Drive folder.
           </p>
         </div>
 
@@ -128,7 +128,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-400" />
-            <span>Proven Hook Formulas</span>
+            <span>Hook & Content Frameworks</span>
           </h2>
           <span className="text-xs text-neutral-400">Click to start creating instantly</span>
         </div>

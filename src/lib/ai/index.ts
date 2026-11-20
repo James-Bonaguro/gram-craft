@@ -1,4 +1,5 @@
 import prisma from "../prisma";
+import { ReelHookData, SlideType } from "@/types";
 
 export interface GenerateCarouselParams {
   input: string;
@@ -8,6 +9,7 @@ export interface GenerateCarouselParams {
   targetAudience?: string;
   bannedWords?: string;
   slideCount?: number;
+  isDemo?: boolean;
 }
 
 export interface GeneratedCarouselResponse {
@@ -33,13 +35,14 @@ export interface GenerateReelParams {
   toneVoice?: string;
   targetAudience?: string;
   bannedWords?: string;
+  isDemo?: boolean;
 }
 
 export interface GeneratedReelResponse {
   title: string;
   caption: string;
   hashtags: string;
-  hooks: Array<{ text: string; score: number }>;
+  hooks: ReelHookData[];
   beats: Array<{
     order: number;
     beatType: "HOOK" | "BODY" | "TRANSITION" | "CTA";
@@ -51,7 +54,6 @@ export interface GeneratedReelResponse {
 }
 
 async function getApiKey(): Promise<{ key: string | null; provider: string }> {
-  // Check DB settings first
   const keySetting = await prisma.appSetting.findUnique({
     where: { key: "gemini_api_key" },
   });
@@ -59,17 +61,134 @@ async function getApiKey(): Promise<{ key: string | null; provider: string }> {
     where: { key: "ai_provider" },
   });
 
-  const key = keySetting?.value || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null;
+  const rawKey = keySetting?.value?.trim() || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null;
+  const key = rawKey && !rawKey.includes("...") && rawKey !== "********" ? rawKey : null;
   const provider = providerSetting?.value || "gemini";
 
   return { key, provider };
 }
 
+function validateCarouselData(data: unknown): GeneratedCarouselResponse {
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid AI response: Expected a JSON object.");
+  }
+  const obj = data as Record<string, unknown>;
+  if (!obj.title || typeof obj.title !== "string") {
+    throw new Error("Invalid AI response: Missing 'title' field.");
+  }
+  if (!Array.isArray(obj.slides) || obj.slides.length === 0) {
+    throw new Error("Invalid AI response: 'slides' must be a non-empty array.");
+  }
+
+  const validSlides = obj.slides.map((s: unknown, idx: number) => {
+    if (!s || typeof s !== "object") {
+      throw new Error(`Invalid AI response: Slide ${idx + 1} must be an object.`);
+    }
+    const slideObj = s as Record<string, unknown>;
+    if (!slideObj.headline || typeof slideObj.headline !== "string") {
+      throw new Error(`Invalid AI response: Slide ${idx + 1} is missing a headline.`);
+    }
+    const order = typeof slideObj.order === "number" ? slideObj.order : idx + 1;
+    const allowedTypes = ["COVER", "CONTENT", "QUOTE", "COMPARISON", "CTA"] as const;
+    const slideType =
+      typeof slideObj.slideType === "string" && (allowedTypes as readonly string[]).includes(slideObj.slideType)
+        ? (slideObj.slideType as SlideType)
+        : "CONTENT";
+
+    return {
+      order,
+      slideType,
+      badgeText: typeof slideObj.badgeText === "string" ? slideObj.badgeText : undefined,
+      headline: String(slideObj.headline),
+      subheadline: typeof slideObj.subheadline === "string" ? slideObj.subheadline : undefined,
+      bodyText: typeof slideObj.bodyText === "string" ? slideObj.bodyText : undefined,
+      bulletPoints: Array.isArray(slideObj.bulletPoints) ? slideObj.bulletPoints.map(String) : [],
+      quoteAuthor: typeof slideObj.quoteAuthor === "string" ? slideObj.quoteAuthor : undefined,
+    };
+  });
+
+  return {
+    title: String(obj.title),
+    caption: typeof obj.caption === "string" ? obj.caption : "",
+    hashtags: typeof obj.hashtags === "string" ? obj.hashtags : "",
+    slides: validSlides,
+  };
+}
+
+function validateReelData(data: unknown): GeneratedReelResponse {
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid AI response: Expected a JSON object.");
+  }
+  const obj = data as Record<string, unknown>;
+  if (!obj.title || typeof obj.title !== "string") {
+    throw new Error("Invalid AI response: Missing 'title' field.");
+  }
+  if (!Array.isArray(obj.beats) || obj.beats.length === 0) {
+    throw new Error("Invalid AI response: 'beats' must be a non-empty array.");
+  }
+
+  const hooks: ReelHookData[] = Array.isArray(obj.hooks)
+    ? obj.hooks.map((h: unknown, idx: number) => {
+        if (h && typeof h === "object") {
+          const hObj = h as Record<string, unknown>;
+          return {
+            text: String(hObj.text || `Hook option ${idx + 1}`),
+            angle: String(hObj.angle || `Angle ${idx + 1}`),
+          };
+        }
+        return {
+          text: String(h || `Hook option ${idx + 1}`),
+          angle: `Angle ${idx + 1}`,
+        };
+      })
+    : [{ text: String(obj.title), angle: "Direct Hook" }];
+
+  const validBeats = obj.beats.map((b: unknown, idx: number) => {
+    if (!b || typeof b !== "object") {
+      throw new Error(`Invalid AI response: Beat ${idx + 1} must be an object.`);
+    }
+    const bObj = b as Record<string, unknown>;
+    const order = typeof bObj.order === "number" ? bObj.order : idx + 1;
+    const allowedTypes = ["HOOK", "BODY", "TRANSITION", "CTA"] as const;
+    const beatType =
+      typeof bObj.beatType === "string" && (allowedTypes as readonly string[]).includes(bObj.beatType)
+        ? (bObj.beatType as "HOOK" | "BODY" | "TRANSITION" | "CTA")
+        : "BODY";
+
+    return {
+      order,
+      beatType,
+      visualCue: typeof bObj.visualCue === "string" ? bObj.visualCue : "Direct to camera",
+      spokenAudio: typeof bObj.spokenAudio === "string" ? bObj.spokenAudio : "",
+      onScreenText: typeof bObj.onScreenText === "string" ? bObj.onScreenText : undefined,
+      estimatedSeconds: typeof bObj.estimatedSeconds === "number" ? bObj.estimatedSeconds : 5,
+    };
+  });
+
+  return {
+    title: String(obj.title),
+    caption: typeof obj.caption === "string" ? obj.caption : "",
+    hashtags: typeof obj.hashtags === "string" ? obj.hashtags : "",
+    hooks,
+    beats: validBeats,
+  };
+}
+
 export async function generateCarousel(params: GenerateCarouselParams): Promise<GeneratedCarouselResponse> {
+  // If explicitly requested demo generation
+  if (params.isDemo) {
+    return generateFallbackCarousel(params);
+  }
+
   const { key } = await getApiKey();
+  if (!key) {
+    throw new Error(
+      "No Gemini API key configured. Please enter your API key in Settings, or enable 'Use Demo Template' for sample generation."
+    );
+  }
 
   const count = params.slideCount || 6;
-  const prompt = `You are a world-class Instagram Carousel designer and copywriter.
+  const prompt = `You are an Instagram Carousel copywriter and structured content designer.
 Brand Voice: ${params.toneVoice || "Direct, insightful, punchy"}
 Target Audience: ${params.targetAudience || "Creators, operators, and professionals"}
 Banned Words (DO NOT USE): ${params.bannedWords || "synergy, paradigm, delve, crucial"}
@@ -79,68 +198,81 @@ Topic / Content Input:
 ${params.input}
 """
 
-Create an engaging Instagram Carousel with exactly ${count} slides.
+Create an Instagram Carousel with exactly ${count} slides.
 Requirements:
-- Slide 1 MUST be a high-converting COVER slide with a curiosity-inducing hook and badgeText (e.g. "Swipe ➔", "Must Read", "Cheat Sheet").
-- Slides 2 to ${count - 1} MUST be high-value CONTENT, COMPARISON, or QUOTE slides. Keep text concise, punchy, and formatted with bulletPoints when appropriate.
-- Slide ${count} MUST be a clear CALL_TO_ACTION slide (e.g. "Save this for later", "Share with someone who needs this", "Follow for more").
+- Slide 1 MUST be a COVER slide with a curiosity-inducing hook and badgeText (e.g. "Swipe ➔", "Guide", "Framework").
+- Slides 2 to ${count - 1} MUST be CONTENT, COMPARISON, or QUOTE slides. Keep text concise and punchy. Include bulletPoints where relevant.
+- Slide ${count} MUST be a CALL_TO_ACTION (CTA) slide (e.g. "Save this for later", "Follow for more").
 - Provide an Instagram caption with clean paragraph spacing and 10-15 relevant hashtags.
 
-Return ONLY a valid JSON object matching this TypeScript interface without markdown fences:
+Return ONLY a valid JSON object matching this schema without markdown fences:
 {
-  "title": "Short descriptive title",
+  "title": "Descriptive title",
   "caption": "Full Instagram caption text",
   "hashtags": "#instagram #growth ...",
   "slides": [
     {
       "order": 1,
       "slideType": "COVER",
-      "badgeText": "Mini tag or category",
-      "headline": "Bold Hook Headline",
+      "badgeText": "Short category or swipe cue",
+      "headline": "Bold Headline",
       "subheadline": "Supporting one-liner",
-      "bodyText": "Optional context",
-      "bulletPoints": []
+      "bodyText": "Concise context",
+      "bulletPoints": [],
+      "quoteAuthor": ""
     }
   ]
 }`;
 
-  if (key) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.7,
-            },
-          }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          return JSON.parse(jsonText);
-        }
-      }
-    } catch (err) {
-      console.error("Gemini API call error, falling back to smart generator:", err);
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+        },
+      }),
     }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
   }
 
-  // High-fidelity fallback / demo generator if API key is not yet set
-  return generateFallbackCarousel(params);
+  const data = await response.json();
+  const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!jsonText) {
+    throw new Error("Gemini API returned an empty response.");
+  }
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    return validateCarouselData(parsed);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse AI-generated carousel: ${message}`);
+  }
 }
 
 export async function generateReel(params: GenerateReelParams): Promise<GeneratedReelResponse> {
-  const { key } = await getApiKey();
+  // If explicitly requested demo generation
+  if (params.isDemo) {
+    return generateFallbackReel(params);
+  }
 
-  const prompt = `You are a top Instagram Reels director, scriptwriter, and viral pacing expert.
+  const { key } = await getApiKey();
+  if (!key) {
+    throw new Error(
+      "No Gemini API key configured. Please enter your API key in Settings, or enable 'Use Demo Template' for sample generation."
+    );
+  }
+
+  const prompt = `You are an Instagram Reels scriptwriter and pacing coordinator.
 Brand Voice: ${params.toneVoice || "Direct, energetic, authentic"}
 Target Audience: ${params.targetAudience || "Ambitious builders, creators, and professionals"}
 Banned Words: ${params.bannedWords || "synergy, revolutionary, delve"}
@@ -150,78 +282,82 @@ Topic / Content Input:
 ${params.input}
 """
 
-Generate a structured Reel storyboard and script optimized for high watch-time and Instagram algorithm retention.
+Generate a structured Reel storyboard and script.
 Requirements:
-- 3 Hook variants with estimated viral retention scores (85-98%).
+- 3 Hook variants with descriptive creative angles (e.g. "Contrarian Angle", "Curiosity Angle", "Common Mistake Angle"). Do NOT invent fake retention percentages or performance claims.
 - 5 to 7 shot-by-shot beats.
 - Beat 1 is HOOK (0-3s).
-- Beats 2-5 are high-pacing BODY beats with exact visual cues (what camera sees, B-roll, props) and spoken dialogue (what creator says).
-- Final beat is CALL TO ACTION.
-- On-screen text for each beat (punchy 3-5 words to capture silent scrollers).
-- Complete Instagram caption with line breaks and targeted hashtags.
+- Beats 2-5 are high-pacing BODY beats with exact visual cues (what camera sees, B-roll, props) and spoken dialogue.
+- Final beat is CALL TO ACTION (CTA).
+- On-screen text for each beat (punchy 3-5 words).
+- Complete Instagram caption with line breaks and hashtags.
 
-Return ONLY a valid JSON object matching this structure:
+Return ONLY a valid JSON object matching this schema without markdown fences:
 {
-  "title": "Title",
+  "title": "Descriptive title",
   "caption": "Full Instagram caption",
   "hashtags": "#reels #creator ...",
   "hooks": [
-    { "text": "Hook 1 text", "score": 96 },
-    { "text": "Hook 2 text", "score": 92 },
-    { "text": "Hook 3 text", "score": 88 }
+    { "text": "Hook 1 script", "angle": "Contrarian Angle" },
+    { "text": "Hook 2 script", "angle": "Curiosity Angle" },
+    { "text": "Hook 3 script", "angle": "Direct How-To Angle" }
   ],
   "beats": [
     {
       "order": 1,
       "beatType": "HOOK",
-      "visualCue": "Direct to camera, punch zoom",
-      "spokenAudio": "If you're still doing X, stop right now.",
-      "onScreenText": "STOP DOING THIS 🛑",
+      "visualCue": "Direct to camera, medium-close",
+      "spokenAudio": "Spoken dialogue here.",
+      "onScreenText": "TEXT OVERLAY",
       "estimatedSeconds": 4
     }
   ]
 }`;
 
-  if (key) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.7,
-            },
-          }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          return JSON.parse(jsonText);
-        }
-      }
-    } catch (err) {
-      console.error("Gemini API call error, falling back to smart generator:", err);
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+        },
+      }),
     }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
   }
 
-  return generateFallbackReel(params);
+  const data = await response.json();
+  const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!jsonText) {
+    throw new Error("Gemini API returned an empty response.");
+  }
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    return validateReelData(parsed);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse AI-generated reel: ${message}`);
+  }
 }
 
 function generateFallbackCarousel(params: GenerateCarouselParams): GeneratedCarouselResponse {
   const cleanInput = params.input.replace(/[\n\r]+/g, " ").trim();
-  const summaryTitle = cleanInput.slice(0, 45) || "5 Rules Every Creator Needs";
+  const rawTitle = cleanInput.slice(0, 40) || "5 Rules Every Creator Needs";
+  const title = `[Demo] ${rawTitle}`;
 
   return {
-    title: summaryTitle,
-    caption: `Most people overcomplicate this.\n\nHere is the exact playbook broken down step-by-step so you can execute immediately.\n\nSave this post so you have it when you need it.\n\nWhich slide resonated most with you? Let me know below 👇`,
-    hashtags: "#growthmindset #contentcreation #creators #instagramstrategy #entrepreneurship #productivity #digitalmarketing #buildinpublic",
+    title,
+    caption: `Most people overcomplicate this.\n\nHere is a structured breakdown you can reference.\n\nSave this post so you have it when you need it.\n\nWhich slide resonated most with you? Let me know below 👇`,
+    hashtags: "#growthmindset #contentcreation #creators #instagramstrategy #productivity #buildinpublic",
     slides: [
       {
         order: 1,
@@ -238,11 +374,11 @@ function generateFallbackCarousel(params: GenerateCarouselParams): GeneratedCaro
         badgeText: "Principle 01",
         headline: "Focus on Velocity Over Perfection",
         subheadline: "Speed of execution beats perfection every time.",
-        bodyText: "If you take 3 weeks to publish what someone tests in 2 days, they learn 10x faster than you. Test rapidly, gather feedback, and iterate in public.",
+        bodyText: "Ship the 80% version and let real feedback dictate the next iteration. Momentum is your most valuable asset.",
         bulletPoints: [
           "Ship the 80% version today",
           "Let real feedback dictate the next iteration",
-          "Momentum is your most valuable asset"
+          "Momentum is your most valuable asset",
         ],
       },
       {
@@ -251,12 +387,12 @@ function generateFallbackCarousel(params: GenerateCarouselParams): GeneratedCaro
         badgeText: "Myth vs Reality",
         headline: "Amateurs Guess. Pros Build Systems.",
         subheadline: "The difference between erratic results and compound growth.",
-        bodyText: "Stop reinventing the wheel every Monday morning. Build reusable templates, clear SOPs, and automated workflows.",
+        bodyText: "Stop reinventing the wheel every session. Build reusable templates and clear routines.",
         bulletPoints: [
           "Amateur: Relies on random motivation",
           "Professional: Follows a scheduled ritual",
           "Amateur: Starts from a blank canvas",
-          "Professional: Refines proven frameworks"
+          "Professional: Refines proven frameworks",
         ],
       },
       {
@@ -264,22 +400,22 @@ function generateFallbackCarousel(params: GenerateCarouselParams): GeneratedCaro
         slideType: "QUOTE",
         badgeText: "Key Insight",
         headline: "“Consistency is only hard when you haven't engineered the friction out of your process.”",
-        subheadline: "",
-        bodyText: "When creation takes 2 hours instead of 2 days, you don't need willpower to stay consistent.",
-        quoteAuthor: params.brandName || "James Bonaguro",
+        subheadline: "Design your workflow so starting takes seconds.",
+        bodyText: "When creation takes minutes instead of hours, you don't need willpower to stay consistent.",
+        quoteAuthor: params.brandName || "Creator",
         bulletPoints: [],
       },
       {
         order: 5,
         slideType: "CONTENT",
         badgeText: "Principle 02",
-        headline: "Own Your Distribution & Archives",
+        headline: "Own Your Assets & Workflows",
         subheadline: "Never build your entire foundation on rented land.",
-        bodyText: "Social algorithms change constantly. Direct sync, email archives, and local asset libraries protect your intellectual property.",
+        bodyText: "Social algorithms change constantly. Direct exports, local asset archives, and clean files protect your work.",
         bulletPoints: [
           "Keep high-res master exports of every post",
-          "Sync directly to your cloud storage",
-          "Repurpose single ideas across multiple mediums"
+          "Sync directly to your local archives",
+          "Repurpose single ideas across multiple mediums",
         ],
       },
       {
@@ -287,12 +423,12 @@ function generateFallbackCarousel(params: GenerateCarouselParams): GeneratedCaro
         slideType: "CTA",
         badgeText: "Action Steps",
         headline: "Save This For Your Next Creation Session",
-        subheadline: "Tag someone who needs to see this today.",
+        subheadline: "Share with someone who needs this today.",
         bodyText: "Hit the save icon below to reference these frameworks. Follow for weekly breakdowns on execution and strategy.",
         bulletPoints: [
           "Save this post 🔖",
           "Share to your story ↗️",
-          "Drop a comment with your favorite slide 👇"
+          "Drop a comment with your thoughts 👇",
         ],
       },
     ],
@@ -301,23 +437,24 @@ function generateFallbackCarousel(params: GenerateCarouselParams): GeneratedCaro
 
 function generateFallbackReel(params: GenerateReelParams): GeneratedReelResponse {
   const cleanInput = params.input.replace(/[\n\r]+/g, " ").trim();
-  const topic = cleanInput.slice(0, 40) || "Scaling Your Content Engine";
+  const topic = cleanInput.slice(0, 35) || "Content Systems";
+  const title = `[Demo] ${topic}`;
 
   return {
-    title: topic,
-    caption: `If you want to scale your output without burning out, you need to hear this.\n\nDrop a comment with 'SYSTEM' and I'll send you our complete workflow checklist.\n\nDouble-tap if this was helpful! 🚀`,
-    hashtags: "#reelsvideo #creatoreconomy #instagramtips #businesstips #workflow #founder #marketinghacks #productivitytips",
+    title,
+    caption: `If you want to scale your output without burning out, here is the breakdown.\n\nDrop a comment with 'SYSTEM' and I'll send you our complete workflow checklist. 🚀`,
+    hashtags: "#reelsvideo #creatoreconomy #instagramtips #businesstips #workflow #productivitytips",
     hooks: [
-      { text: `Stop making this massive mistake with ${topic} in 2026:`, score: 96 },
-      { text: `The biggest lie you've been told about ${topic} (and what actually works):`, score: 92 },
-      { text: `How I automated my entire ${topic} process in 3 simple steps:`, score: 89 },
+      { text: `Stop making this common mistake with ${topic}:`, angle: "Mistake Hook" },
+      { text: `The single biggest misconception about ${topic}:`, angle: "Contrarian Hook" },
+      { text: `How to build a streamlined workflow for ${topic} in 3 steps:`, angle: "How-To Hook" },
     ],
     beats: [
       {
         order: 1,
         beatType: "HOOK",
         visualCue: "Direct to camera, medium-close, slight zoom-in, energetic delivery",
-        spokenAudio: `If you are still struggling with ${topic}, you need to stop doing this one thing right now.`,
+        spokenAudio: `If you are still struggling with ${topic}, here is the one thing you need to rethink.`,
         onScreenText: "STOP DOING THIS 🛑",
         estimatedSeconds: 4,
       },
@@ -325,7 +462,7 @@ function generateFallbackReel(params: GenerateReelParams): GeneratedReelResponse
         order: 2,
         beatType: "BODY",
         visualCue: "Cut to side-angle B-roll typing at desk or pointing to screen",
-        spokenAudio: "Most people think they need more hours in the day. But the truth is, you don't have a time problem — you have a friction problem.",
+        spokenAudio: "Most people think they have a time problem. But the truth is, you have a friction problem.",
         onScreenText: "IT'S A FRICTION PROBLEM ⏳",
         estimatedSeconds: 5,
       },
@@ -333,7 +470,7 @@ function generateFallbackReel(params: GenerateReelParams): GeneratedReelResponse
         order: 3,
         beatType: "BODY",
         visualCue: "Screen recording / high-contrast graphic showing the 3-step workflow",
-        spokenAudio: "Here's what top creators do instead: They build templated design systems and automated cloud sync from day one.",
+        spokenAudio: "Top creators build templated design systems and automated local export from day one.",
         onScreenText: "BUILD THE SYSTEM ⚙️",
         estimatedSeconds: 6,
       },
@@ -341,15 +478,15 @@ function generateFallbackReel(params: GenerateReelParams): GeneratedReelResponse
         order: 4,
         beatType: "BODY",
         visualCue: "Back to talking head with snappy hands-on gestures",
-        spokenAudio: "When every slide and reel script is structured before you hit record, creation takes minutes instead of hours.",
+        spokenAudio: "When every slide and reel beat is structured before you hit record, creation takes minutes instead of hours.",
         onScreenText: "MINUTES, NOT HOURS ⚡",
         estimatedSeconds: 5,
       },
       {
         order: 5,
         beatType: "CTA",
-        visualCue: "Point down towards the comment section with confident smile",
-        spokenAudio: "Comment the word 'SYSTEM' below, and I'll send you our exact step-by-step setup guide for free.",
+        visualCue: "Point down towards the comment section with confident delivery",
+        spokenAudio: "Comment the word 'SYSTEM' below, and I'll send you our step-by-step setup guide for free.",
         onScreenText: "COMMENT 'SYSTEM' 👇",
         estimatedSeconds: 4,
       },

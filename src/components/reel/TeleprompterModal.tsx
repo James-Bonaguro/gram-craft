@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ReelBeatData } from "@/types";
 import { Play, Pause, RotateCcw, X, Video, Timer } from "lucide-react";
 
@@ -20,46 +20,106 @@ export function TeleprompterModal({ beats, title, isOpen, onClose }: Teleprompte
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  const handleClose = useCallback(() => {
+    setIsPlaying(false);
+    setElapsedSeconds(0);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    onClose();
+  }, [onClose]);
+
+  // Clean up when modal closes or unmounts
+  useEffect(() => {
+    if (!isOpen) {
+      setIsPlaying(false);
+      setElapsedSeconds(0);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+      }
+    }
+  }, [isOpen]);
+
+  // Handle ESC key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        handleClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, handleClose]);
 
   // Timer loop
   useEffect(() => {
-    if (isPlaying) {
+    if (isPlaying && isOpen) {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
     } else if (timerRef.current) {
       clearInterval(timerRef.current);
+      timerRef.current = null;
     }
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
-  }, [isPlaying]);
+  }, [isPlaying, isOpen]);
 
   // Teleprompter auto-scroll loop
   useEffect(() => {
-    let animationFrameId: number;
-
     const scroll = () => {
-      if (isPlaying && scrollRef.current) {
-        // Calculate pixels per frame based on WPM (roughly 5 chars per word)
+      if (isPlaying && isOpen && scrollRef.current) {
+        // Calculate pixels per frame based on WPM
         const pixelsPerSecond = (wpm / 60) * (fontSize * 0.7);
         scrollRef.current.scrollTop += pixelsPerSecond / 60;
+        animFrameRef.current = requestAnimationFrame(scroll);
       }
-      animationFrameId = requestAnimationFrame(scroll);
     };
 
-    if (isPlaying) {
-      animationFrameId = requestAnimationFrame(scroll);
+    if (isPlaying && isOpen) {
+      animFrameRef.current = requestAnimationFrame(scroll);
     }
 
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isPlaying, wpm, fontSize]);
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+    };
+  }, [isPlaying, isOpen, wpm, fontSize]);
 
   if (!isOpen) return null;
 
   const resetAll = () => {
     setIsPlaying(false);
     setElapsedSeconds(0);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
@@ -184,7 +244,7 @@ export function TeleprompterModal({ beats, title, isOpen, onClose }: Teleprompte
 
           {/* Close */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-900 transition-colors"
           >
             <X className="w-7 h-7" />

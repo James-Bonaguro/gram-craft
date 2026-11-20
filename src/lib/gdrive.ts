@@ -46,11 +46,20 @@ export async function saveProjectToGDrive(payload: SaveExportPayload) {
 
   const safeTitle = payload.projectName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
   const dateStr = new Date().toISOString().split("T")[0];
-  const targetFolder = path.join(basePath, brandFolder, `${dateStr}_${safeTitle}`);
+  let targetFolder = path.join(basePath, brandFolder, `${dateStr}_${safeTitle}`);
+
+  // Prevent silently overwriting previous exports
+  if (fs.existsSync(targetFolder)) {
+    let counter = 1;
+    while (fs.existsSync(`${targetFolder}_(${counter})`)) {
+      counter++;
+    }
+    targetFolder = `${targetFolder}_(${counter})`;
+  }
 
   const validation = validateDirectory(targetFolder);
   if (!validation.isValid) {
-    throw new Error(`Failed to access Google Drive directory: ${validation.error}`);
+    throw new Error(`Failed to access local export directory: ${validation.error}`);
   }
 
   const writtenFiles: string[] = [];

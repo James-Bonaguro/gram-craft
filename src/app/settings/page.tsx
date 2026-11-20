@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Settings, Cloud, Key, Check, Save, Sparkles } from "lucide-react";
+import { Settings, Folder, Key, Check, Save, Info } from "lucide-react";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({
@@ -9,8 +9,7 @@ export default function SettingsPage() {
       "/Users/jamesbonaguro/Library/CloudStorage/GoogleDrive-james.bonaguro@gmail.com/My Drive/GramCraft Exports",
     ai_provider: "gemini",
     gemini_api_key: "",
-    openai_api_key: "",
-    anthropic_api_key: "",
+    has_gemini_api_key: "false",
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -42,12 +41,20 @@ export default function SettingsPage() {
 
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
+
+      // Re-fetch to refresh masked state
+      const refreshed = await fetch("/api/settings").then((r) => r.json());
+      if (refreshed && typeof refreshed === "object") {
+        setSettings((prev) => ({ ...prev, ...refreshed }));
+      }
     } catch (err) {
       alert("Error saving settings: " + String(err));
     } finally {
       setIsSaving(false);
     }
   };
+
+  const isKeyConfigured = settings.has_gemini_api_key === "true";
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10 w-full space-y-10 text-white">
@@ -59,7 +66,7 @@ export default function SettingsPage() {
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight">App Settings</h1>
           <p className="text-neutral-400 text-sm mt-1">
-            Configure Google Drive export paths and pluggable AI providers.
+            Configure your local export folder destination and AI credentials.
           </p>
         </div>
 
@@ -86,23 +93,23 @@ export default function SettingsPage() {
         <div className="text-center py-16 text-neutral-500">Loading settings...</div>
       ) : (
         <div className="space-y-8">
-          {/* Section 1: Google Drive Sync Directory */}
+          {/* Section 1: Local Export Folder */}
           <div className="p-8 rounded-3xl bg-neutral-900/60 border border-neutral-800 space-y-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <Cloud className="w-5 h-5" />
+                <Folder className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold">Google Drive Auto-Sync Path</h2>
+                <h2 className="text-lg font-bold">Local Export Directory</h2>
                 <p className="text-xs text-neutral-400">
-                  Direct local filesystem export path into your mounted macOS Google Drive directory.
+                  Local filesystem folder where slide PNGs, reel scripts, and caption text are saved.
                 </p>
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                Mounted Export Directory
+                Export Destination Path
               </label>
               <input
                 type="text"
@@ -111,89 +118,69 @@ export default function SettingsPage() {
                 placeholder="/Users/.../GoogleDrive-.../My Drive/GramCraft Exports"
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-200 font-mono focus:outline-none focus:border-emerald-500"
               />
-              <p className="text-xs text-neutral-500">
-                Whenever you export, slides, scripts, captions, and hashtags are saved here into organized brand and date folders, syncing automatically to the cloud.
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                GramCraft writes files directly to this local disk path. If you point this to your mounted Google Drive folder (e.g. inside <code className="text-neutral-300">~/Library/CloudStorage/...</code>), the Google Drive desktop client will automatically sync the exported files to the cloud in the background.
               </p>
             </div>
           </div>
 
-          {/* Section 2: AI Provider & API Keys */}
+          {/* Section 2: AI Engine & API Keys */}
           <div className="p-8 rounded-3xl bg-neutral-900/60 border border-neutral-800 space-y-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
                 <Key className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold">AI Engine & API Keys</h2>
+                <h2 className="text-lg font-bold">AI Provider & Credentials</h2>
                 <p className="text-xs text-neutral-400">
-                  Google Gemini powers high-speed structured generation. You can also configure OpenAI or Anthropic.
+                  Google Gemini powers live copy generation, reel scripts, and structured formatting.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-4">
+              <div className="space-y-1.5">
                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                  Primary AI Provider
+                  Active Provider
                 </label>
-                <select
-                  value={settings.ai_provider || "gemini"}
-                  onChange={(e) => setSettings({ ...settings, ai_provider: e.target.value })}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none"
-                >
-                  <option value="gemini">Google Gemini (Gemini 2.0 Flash / Pro) — Recommended</option>
-                  <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
-                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
-                </select>
+                <div className="p-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white font-medium flex items-center justify-between">
+                  <span>Google Gemini (gemini-2.0-flash)</span>
+                  <span className="text-xs text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">
+                    Supported
+                  </span>
+                </div>
               </div>
 
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
                     Google Gemini API Key
                   </label>
-                  <span className="text-[11px] text-indigo-400 font-medium">Recommended for speed & context</span>
+                  {isKeyConfigured ? (
+                    <span className="text-xs text-emerald-400 flex items-center gap-1 font-semibold">
+                      <Check className="w-3.5 h-3.5" /> Key Saved
+                    </span>
+                  ) : (
+                    <span className="text-xs text-amber-400 font-medium">Key Not Configured</span>
+                  )}
                 </div>
                 <input
                   type="password"
                   value={settings.gemini_api_key || ""}
                   onChange={(e) => setSettings({ ...settings, gemini_api_key: e.target.value })}
-                  placeholder="AIzaSy..."
+                  placeholder={isKeyConfigured ? "Enter new key to replace existing" : "AIzaSy..."}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-indigo-500"
                 />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                  OpenAI API Key (Optional)
-                </label>
-                <input
-                  type="password"
-                  value={settings.openai_api_key || ""}
-                  onChange={(e) => setSettings({ ...settings, openai_api_key: e.target.value })}
-                  placeholder="sk-..."
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                  Anthropic API Key (Optional)
-                </label>
-                <input
-                  type="password"
-                  value={settings.anthropic_api_key || ""}
-                  onChange={(e) => setSettings({ ...settings, anthropic_api_key: e.target.value })}
-                  placeholder="sk-ant-..."
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-indigo-500"
-                />
+                <p className="text-xs text-neutral-500">
+                  Stored keys are kept local in SQLite and masked in API responses.
+                </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/20 flex items-start gap-3 text-xs text-indigo-300">
-              <Sparkles className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="p-4 rounded-2xl bg-neutral-950/80 border border-neutral-800 flex items-start gap-3 text-xs text-neutral-300">
+              <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
               <span>
-                Note: Even without entering an API key immediately, GramCraft includes built-in viral generation templates and smart fallbacks so you can test and preview all carousels and reels instantly.
+                <strong>Demo Mode Available</strong>: If no Gemini API key is configured or you wish to work offline, select <strong>&quot;Use Demo Template&quot;</strong> in the studio to populate sample slide decks and storyboard layouts without making live API calls.
               </span>
             </div>
           </div>
