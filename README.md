@@ -1,94 +1,148 @@
-# GramCraft
+# GramCraft 🎨
 
-> **Status**: Experimental portfolio prototype — AI-assisted first Antigravity build.  
-> Not intended or claimed for commercial production, multi-tenant deployment, or direct social media publishing.
+> **A fast, local-first studio for crafting high-converting Instagram Carousels & Reel storyboards.**  
+> Built with Next.js 15, React, Tailwind CSS, Prisma, SQLite, and Google Gemini AI.
 
-GramCraft is a local studio tool designed to draft, format, and organize Instagram Carousels (1080 × 1350 px) and Reel storyboard scripts. It combines structured layout templates, custom brand kits, and optional AI-assisted drafting via Google Gemini.
+---
+
+## Overview
+
+GramCraft brings structure, typography, and speed to Instagram content creation. Instead of fighting clunky drag-and-drop design canvases or messy text files, GramCraft gives creators and developers an opinionated, high-productivity studio:
+
+- **Carousel Studio**: Rapidly draft 1080 × 1350 px multi-slide carousels across proven archetypes (`COVER`, `CONTENT`, `COMPARISON`, `QUOTE`, `CTA`) with 4 distinct design styles.
+- **Reel Studio & Teleprompter**: Script video beats (visual cues, spoken dialogue, on-screen text) and rehearse directly inside a built-in, mirrored full-screen teleprompter.
+- **Brand Kits**: Maintain consistent visual identities with custom color palettes, public handles, and font pairings.
+- **Gemini AI + Offline Demo Mode**: Generate carousels and storyboard scripts from raw ideas or notes, or use instant demo templates with zero setup.
+- **Reliable Local Export**: Download production-ready ZIP bundles or sync directly into your local Google Drive folder with automatic versioning.
+
+---
+
+## Features
+
+### 📸 Carousel Studio (`/studio/carousel`)
+- **5 Slide Archetypes**:
+  - `COVER`: High-impact title hooks with badge tags.
+  - `CONTENT`: Structured body text and interactive bullet points.
+  - `COMPARISON`: Side-by-side pitfall vs. solution breakdown.
+  - `QUOTE`: Focused insight card with author attribution.
+  - `CTA`: Final slide call-to-action with handle branding.
+- **4 Design Styles**: `Minimal`, `Tweet-style`, `Bold Contrast`, and `Infographic`.
+- **Dynamic Contrast Engine**: Automatically calculates background luminance to ensure text remains sharp and legible across light, dark, and saturated color palettes.
+- **Zero-Dependency Typography**: Pre-configured system font stacks (`Inter`, `System UI`, `Georgia`, `Mono`, `Helvetica`) that render instantly without external webfont latency.
+- **Visual Overflow Warnings**: Real-time character counters and warning badges alert you before text exceeds 1080 × 1350 boundaries.
+
+### 🎬 Reel Studio & Interactive Teleprompter (`/studio/reel`)
+- **Beat-by-Beat Storyboarding**: Outline video flow across `HOOK`, `BODY`, `TRANSITION`, and `CTA` beats with estimated timing.
+- **Director-Grade Teleprompter**:
+  - Auto-scroll with configurable Words Per Minute (WPM: 80–220).
+  - Dynamic font size scaling (24px–72px).
+  - Mirrored mode for recording with phone or beam-splitter teleprompter setups.
+  - Live timer tracking with clean lifecycle cleanup on pause or close.
+
+### 🎨 Brand Kits (`/brand-kits`)
+- Manage distinct visual identities: primary, secondary, background, card, and text colors.
+- Separate internal brand management names from public slide footer branding (`@handle` and display name).
+
+### ⚡ Smart Content Generation
+- **Powered by Gemini 2.5 Flash**: Transform rough notes, blog posts, or concepts into structured 5–10 slide carousels and hook-driven video scripts.
+- **One-Click Demo Mode**: Test and explore layouts instantly with built-in sample generation—no API key required.
+- **Strict Data Validation**: Every AI response is validated against strict schemas before rendering.
+
+### 📦 Local Export & Sync
+- **ZIP Bundler**: Verifies and renders every slide as a crisp 1080 × 1350 PNG along with complete formatted caption and hashtag text.
+- **Direct-to-Folder Sync**: Export directly to your local file path (e.g. mounted Google Drive folder).
+- **Collision Protection**: Automatically versions exports (`_1`, `_2`) so you never accidentally overwrite existing decks.
+
+---
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router), React 19, TypeScript
+- **Styling**: Tailwind CSS, Lucide React Icons
+- **Database**: SQLite with Prisma ORM (Atomic transactions & state persistence)
+- **AI**: Google Gemini API via official REST interface
+- **Export**: `html-to-image` for high-res DOM rasterization, `JSZip` for packaging
 
 ---
 
 ## Quick Start
 
-### 1. Requirements
-- Node.js 18+ (tested with Node 20+)
+### 1. Prerequisites
+- Node.js 18+ (tested on Node 20 / 22)
 - npm
 
-### 2. Installation & Setup
+### 2. Setup & Run
 ```bash
-# Clone or navigate to the repository
+# Clone the repository
 cd /Users/jamesbonaguro/Dev/gram-craft
 
 # Install dependencies
 npm install
 
-# Initialize SQLite database schema
+# Initialize local database
 npx prisma db push
 
-# Start local development server
+# Start the dev server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) to start creating!
 
 ---
 
-## Core Capabilities
+## Configuration
 
-### 1. Carousel Studio (`/studio/carousel`)
-- **Slide Templates**: 5 slide types (`COVER`, `CONTENT`, `COMPARISON`, `QUOTE`, `CTA`) across 4 visual styles (`minimal`, `tweet`, `bold`, `infographic`).
-- **Typography & Styling**: Uses local/system font stacks (`Inter`, `System UI`, `Georgia`, `Mono`, `Helvetica`) without external font service dependencies. Contrast algorithms dynamically adjust text luminance for dark and light palette modes.
-- **Content Editing**: Edit headlines, subheadlines, body copy, structured bullet points, badges, quote authors, captions, and hashtags. Excess text warning indicators flag copy that exceeds typical slide dimensions.
-- **Exporting**: Bundles validated 1080 × 1350 PNG images and copy text into a downloadable ZIP archive, or exports directly to a designated local directory.
-
-### 2. Reel Studio (`/studio/reel`)
-- **Beat-by-Beat Storyboarding**: Structure video ideas into sequential beats (`HOOK`, `BODY`, `TRANSITION`, `CTA`) with visual action cues, spoken dialogue, and text overlays.
-- **Interactive Teleprompter**: Built-in full-screen teleprompter with adjustable reading speed (WPM), font size scaling, auto-scroll, timer tracking, and mirrored mode for recording setups. All timers and animation frames automatically cancel on modal close.
-
-### 3. Brand Kits (`/brand-kits`)
-- Store reusable visual identities: distinct internal kit names, public handle (`@handle`), public display name, primary/secondary/accent color hexes, and font configurations.
+Settings are managed locally at `/settings` or in `.env`:
+- **Gemini API Key**: Add your key in the app Settings UI (securely masked and stored locally in SQLite) or set `GEMINI_API_KEY` in `.env`.
+- **Export Directory**: Configure the destination folder for direct local exports (defaults to your local Google Drive sync folder or any directory on your machine).
 
 ---
 
-## Demo Mode vs. Real AI Generation
+## Project Structure
 
-- **Explicit Demo Mode**: When the `Use Demo Template` toggle is enabled, GramCraft generates deterministic sample carousels and storyboard scripts locally without hitting external APIs. All demo output is explicitly prefixed with `[Demo]`.
-- **Live Gemini AI Generation**: When Demo Mode is disabled, requests require a valid Google Gemini API key configured in Settings (`/settings`) or through the `GEMINI_API_KEY` environment variable.
-- **Strict Validation**: Generation returns structured errors if credentials are missing, network requests fail, or the returned JSON does not match the strict schema. Failed requests never silently fall back to synthetic output disguised as real AI.
-- **Honest Metrics**: Arbitrary "viral retention" or engagement prediction metrics have been removed.
-
----
-
-## Local Directory Export vs. Cloud Sync
-
-- **Truthful Status**: The app exports bundles to a local filesystem directory (e.g., a mounted Google Drive directory path on macOS such as `~/Library/CloudStorage/...`).
-- **No Direct Cloud Auth**: GramCraft does not connect directly to Google Drive APIs or OAuth; it writes files to a local folder.
-- **Collision Prevention**: Export operations automatically append sequential numbering (`_1`, `_2`) if a folder with the same project name already exists, preventing accidental data overwrites.
-
----
-
-## Verified vs. Unverified Features
-
-| Feature | Status | Verification Details |
-|---|---|---|
-| **Transactional Project Saving** | **Verified** | Wrapped in Prisma atomic transactions; failed slide saves roll back completely; project ID retained after initial save to prevent duplicates. |
-| **Settings Restoration & Persistence** | **Verified** | Project input mode, raw input text, brand kit, captions, hashtags, and template styles persist across reload. |
-| **Secret Masking** | **Verified** | API keys are masked in GET endpoints (`AIza...XXXX`) and protected against accidental blank overwrites. |
-| **1080 × 1350 PNG & ZIP Packaging** | **Verified** | Every slide element is validated for PNG headers and exact 1080 × 1350 resolution prior to ZIP generation. |
-| **Teleprompter Animation Cleanup** | **Verified** | `requestAnimationFrame` and interval timers clean up immediately on close, pause, or ESC keypress. |
-| **System Typography & Contrast** | **Verified** | System font stacks applied cleanly across all four templates without external network calls; light/dark luminance contrast maintained. |
-| **Direct Meta Graph API Publishing** | **Unverified / Unsupported** | GramCraft does not connect to Meta Graph API or schedule live Instagram posts. |
-| **Direct Cloud Drive OAuth Sync** | **Unverified / Unsupported** | Cloud storage sync relies entirely on local filesystem folder mounting. |
+```
+gram-craft/
+├── prisma/
+│   ├── schema.prisma       # SQLite data schema (Projects, Slides, Beats, Brands, Settings)
+│   └── dev.db              # Local database
+├── src/
+│   ├── app/
+│   │   ├── studio/carousel # Carousel creator & slide editor
+│   │   ├── studio/reel     # Reel storyboarding studio
+│   │   ├── brand-kits      # Multi-brand visual identity manager
+│   │   ├── settings        # Local storage & API configuration
+│   │   └── api/            # Next.js API route handlers
+│   ├── components/
+│   │   ├── carousel/       # SlideRenderer & template styles
+│   │   ├── reel/           # TeleprompterModal & storyboard cards
+│   │   └── export/         # ExportModal & PNG packager
+│   └── lib/
+│       ├── ai/             # Gemini integration & validation schemas
+│       └── gdrive.ts       # Collision-safe local folder exporter
+└── scripts/
+    └── verify-gram-craft.ts # Automated test & verification suite
+```
 
 ---
 
-## Known Limitations
+## Development & Verification
 
-1. **Simple Template Editor**: Not a freeform graphic design canvas (like Canva or Figma). Slide layouts adhere strictly to predefined responsive CSS grid/flex structures.
-2. **Local Storage**: Designed for single-user local SQLite operation (`dev.db`). Not built for multi-user authorization or concurrent editing.
-3. **API Key Storage**: API keys are stored in the local SQLite `AppSetting` table for personal convenience. Ensure the SQLite database file remains local and is not shared publicly.
+Run the verification suite to test database transactions, AI fallback validation, and collision-free exports:
+
+```bash
+# Run verification test suite
+npx tsx scripts/verify-gram-craft.ts
+
+# Type check & lint
+npm run lint
+npx tsc --noEmit
+
+# Production build check
+npm run build
+```
 
 ---
 
 ## License
 
-Personal exploration and portfolio project.
+Personal exploration and portfolio project built with Antigravity.
