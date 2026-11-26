@@ -1,4 +1,4 @@
-# GramCraft 🎨
+# [GramCraft](https://gram-craft.vercel.app/) 🎨
 
 > **A fast, local-first studio for crafting high-converting Instagram Carousels & Reel storyboards.**  
 > Built with Next.js 15, React, Tailwind CSS, Prisma, SQLite, and Google Gemini AI.
